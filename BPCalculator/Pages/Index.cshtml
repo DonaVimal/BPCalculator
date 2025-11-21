@@ -1,0 +1,61 @@
+﻿@page
+@model BPCalculator.Pages.BloodPressureModel
+
+@{
+    ViewData["Title"] = "BP Category Calculator";
+
+    var resultCategory = ViewData["Category"] as string;
+    var guidance = ViewData["Guidance"] as string;
+    var lastReading = ViewData["LastBP"] as string;
+}
+
+<h4>BP Category Calculator</h4>
+<hr />
+
+<div class="row">
+    <div class="col-md-4">
+        <form method="post" class="p-4 border rounded shadow-sm">
+
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+            <div class="form-group mb-3">
+                <label asp-for="BP.Systolic" class="control-label"></label>
+                <input asp-for="BP.Systolic" class="form-control" />
+                <span asp-validation-for="BP.Systolic" class="text-danger"></span>
+            </div>
+
+            <div class="form-group mb-3">
+                <label asp-for="BP.Diastolic" class="control-label"></label>
+                <input asp-for="BP.Diastolic" class="form-control" />
+                <span asp-validation-for="BP.Diastolic" class="text-danger"></span>
+            </div>
+
+            <div class="form-group mb-3">
+                <input type="submit" value="Submit" class="btn btn-primary w-100" />
+            </div>
+
+            @* Show results only if category exists *@
+            @if (resultCategory != null)
+            {
+                <div class="alert alert-info mt-3">
+                    <h5><strong>BP Category:</strong> @resultCategory</h5>
+                    <p><strong>Guidance:</strong> @guidance</p>
+
+                    @if (!string.IsNullOrEmpty(lastReading))
+                    {
+                        <hr />
+                        <p class="small text-muted">
+                            <strong>Last Reading:</strong> @lastReading
+                        </p>
+                    }
+                </div>
+            }
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
