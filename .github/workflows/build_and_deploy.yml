@@ -16,6 +16,9 @@ env:
   SOLUTION_PATH: "BPCalculator.sln"
   API_PROJECT_PATH: "BPCalculator"
   PUBLISH_DIR: "./publish"
+  SONAR_HOST_URL: "https://sonarcloud.io"
+  SONAR_PROJECT_KEY: "DonaVimal_BPCalculator"
+  SONAR_ORG_KEY: "dona-ks"
 
 # Define the separate jobs that make up this workflow
 jobs:
@@ -32,15 +35,42 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+        # Install SonarScanner .NET tool
+      - name: Install SonarScanner
+        run: dotnet tool install --global dotnet-sonarscanner
+
+      - name: SonarQube Begin Analysis
+        run: |
+          dotnet sonarscanner begin \
+            /k:"${{ env.SONAR_PROJECT_KEY }}" \
+            /o:"${{ env.SONAR_ORG_KEY }}" \
+            /d:sonar.host.url="${{ env.SONAR_HOST_URL }}" \
+            /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
+            /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml"
+
       - name: Restore
         run: dotnet restore ${{ env.SOLUTION_PATH }}
 
       - name: Build
         run: dotnet build ${{ env.SOLUTION_PATH }} --configuration Release --no-restore
       
-      - name: Test
-        run: dotnet test ${{ env.SOLUTION_PATH }} --configuration Release --no-restore --no-build --verbosity normal
+      #- name: Test
+      #  run: dotnet test ${{ env.SOLUTION_PATH }} --configuration Release --no-restore --no-build --verbosity normal
       
+      - name: Run Tests with Coverage
+        run: |
+          dotnet test ${{ env.SOLUTION_PATH }} \
+            --configuration Release \
+            --no-build \
+            /p:CollectCoverage=true \
+            /p:CoverletOutputFormat=opencover \
+            /p:CoverletOutput=./TestResults/coverage.opencover.xml
+
+      - name: SonarQube End Analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
+
       - name: Publish
         run: dotnet publish ${{ env.API_PROJECT_PATH }} --configuration Release --no-restore --no-build --property:PublishDir=${{ env.PUBLISH_DIR }}
       
