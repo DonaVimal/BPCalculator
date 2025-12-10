@@ -17,7 +17,7 @@ env:
   AZURE_WEBAPP_PACKAGE_PATH: "./BPCalculator/publish"
   DOTNET_VERSION: "9.x"
   SOLUTION_PATH: "BPCalculator.sln"
-  API_PROJECT_PATH: "BPCalculator/BPCalculator.csproj"
+  API_PROJECT_PATH: "BPCalculator"
   PUBLISH_DIR: "./publish"
   SONAR_HOST_URL: "https://sonarcloud.io"
   SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
@@ -91,11 +91,8 @@ jobs:
         run: dotnet-sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"    
 
       - name: Publish
-        run: dotnet publish ${{ env.API_PROJECT_PATH }} \
-             --configuration Release \
-             --no-restore --no-build \
-             --output ${{ env.PUBLISH_DIR }}
-      
+        run: dotnet publish ${{ env.API_PROJECT_PATH }} --configuration Release --no-restore --no-build --property:PublishDir=${{ env.PUBLISH_DIR }}
+
       # upload the published web app
       - name: Upload WebApp Artifact
         uses: actions/upload-artifact@v4
