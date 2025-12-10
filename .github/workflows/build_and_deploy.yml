@@ -37,7 +37,7 @@ jobs:
 
         # Install SonarScanner .NET tool
       - name: Install SonarScanner
-        run: 
+        run: |
           dotnet tool install --global dotnet-sonarscanner
           dotnet tool install --global dotnet-reportgenerator-globaltool
 
