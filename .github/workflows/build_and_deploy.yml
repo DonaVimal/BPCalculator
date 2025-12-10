@@ -46,7 +46,7 @@ jobs:
             /o:"${{ env.SONAR_ORG_KEY }}" \
             /d:sonar.host.url="${{ env.SONAR_HOST_URL }}" \
             /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
-            /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml"
+            /d:sonar.cs.opencover.reportsPaths==BPCalculator.Tests/coverage.xml"
 
       - name: Restore
         run: dotnet restore ${{ env.SOLUTION_PATH }}
