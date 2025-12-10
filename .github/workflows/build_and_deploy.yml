@@ -7,6 +7,9 @@ on:
   push:
     branches:
       - master # Run automatically when code is pushed to main branch
+  pull_request:
+    branches: 
+      - master 
 
 # Environment variables used throughout the workflow
 env:
@@ -17,8 +20,9 @@ env:
   API_PROJECT_PATH: "BPCalculator"
   PUBLISH_DIR: "./publish"
   SONAR_HOST_URL: "https://sonarcloud.io"
-  SONAR_PROJECT_KEY: "DonaVimal_BPCalculator"
-  SONAR_ORG_KEY: "dona-ks"
+  SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+  SONAR_ORG: ${{ secrets.SONAR_ORG }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
 # Define the separate jobs that make up this workflow
 jobs:
@@ -39,17 +43,17 @@ jobs:
       - name: Install SonarScanner
         run: |
           dotnet tool install --global dotnet-sonarscanner
-          dotnet tool install --global dotnet-reportgenerator-globaltool
+          dotnet tool install --global coverlet.console
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       - name: SonarQube Begin Analysis
         run: |
           dotnet sonarscanner begin \
             /k:"${{ env.SONAR_PROJECT_KEY }}" \
-            /o:"${{ env.SONAR_ORG_KEY }}" \
+            /o:"${{ env.SONAR_ORG }}" \
             /d:sonar.host.url="${{ env.SONAR_HOST_URL }}" \
-            /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
-            /d:sonar.cs.opencover.reportsPaths=BPCalculator.Unit.Tests/coverage.xml
-            /d:sonar.token=${{ secrets.SONAR_TOKEN }}
+            /d:sonar.token="${{ env.SONAR_TOKEN }}" \
+            /d:sonar.cs.opencover.reportsPaths="TestReports/coverage.xml"
 
       - name: Restore
         run: dotnet restore ${{ env.SOLUTION_PATH }}
@@ -57,27 +61,42 @@ jobs:
       - name: Build
         run: dotnet build ${{ env.SOLUTION_PATH }} --configuration Release --no-restore
       
-      #- name: Test
-      #  run: dotnet test ${{ env.SOLUTION_PATH }} --configuration Release --no-restore --no-build --verbosity normal
-      
       - name: Run unit tests
-        run: dotnet test BPCalculator.Unit.Tests/BPCalculator.Unit.Tests.csproj /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=./coverage.xml --configuration Release
-
-      - name: Sonar Scanner End Analysis
         run: |
-          dotnet sonarscanner end \
-            /d:sonar.login=${{ secrets.SONAR_TOKEN }}
+          mkdir -p TestReports
+          dotnet test BPCalculator.Unit.Tests/BPCalculator.Unit.Tests.csproj \
+            --configuration Release \
+            --logger "trx;LogFileName=test_results.trx" \
+            --no-build \
+            --results-directory TestReports
+      
+      - name: Generate OpenCover Coverage
+        run: |
+          mkdir -p TestReports
+          coverlet \
+            BPCalculator.Unit.Tests/bin/Release/net9.0/BPCalculator.Unit.Tests.dll \
+            --target "dotnet" \
+            --targetargs "test BPCalculator.Unit.Tests/BPCalculator.Unit.Tests.csproj --no-build --configuration Release" \
+            --format opencover \
+            --output TestReports/coverage.xml
+      
+      - name: List TestReports
+        run: ls -R TestReports
 
+      - name: SonarCloud End
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: dotnet-sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"    
 
       - name: Publish
         run: dotnet publish ${{ env.API_PROJECT_PATH }} --configuration Release --no-restore --no-build --property:PublishDir=${{ env.PUBLISH_DIR }}
       
       # Store the published output as an artifact for later jobs
-      - name: Publish Artifacts
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: webapp # Name of the artifact
-          path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+          name: test-results
+          path: TestReports/
   
    # Second job: deploy the application to Azure
   deploy:
