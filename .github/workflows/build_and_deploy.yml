@@ -91,7 +91,11 @@ jobs:
         run: dotnet-sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"    
 
       - name: Publish
-        run: dotnet publish ${{ env.API_PROJECT_PATH }} --configuration Release --no-restore --no-build --property:PublishDir=${{ env.PUBLISH_DIR }}
+        run: dotnet publish ${{ env.API_PROJECT_PATH }} --configuration Release --no-restore --no-build --output ${{ env.PUBLISH_DIR }}
+      
+      # Add this to verify files exist in the logs
+      - name: Verify Publish Output
+        run: ls -R ${{ env.PUBLISH_DIR }}
 
       # upload the published web app
       - name: Upload WebApp Artifact
