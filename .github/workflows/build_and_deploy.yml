@@ -37,7 +37,9 @@ jobs:
 
         # Install SonarScanner .NET tool
       - name: Install SonarScanner
-        run: dotnet tool install --global dotnet-sonarscanner
+        run: 
+          dotnet tool install --global dotnet-sonarscanner
+          dotnet tool install --global dotnet-reportgenerator-globaltool
 
       - name: SonarQube Begin Analysis
         run: |
@@ -47,6 +49,7 @@ jobs:
             /d:sonar.host.url="${{ env.SONAR_HOST_URL }}" \
             /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
             /d:sonar.cs.opencover.reportsPaths=BPCalculator.Unit.Tests/coverage.xml
+            /d:sonar.token=${{ secrets.SONAR_TOKEN }}
 
       - name: Restore
         run: dotnet restore ${{ env.SOLUTION_PATH }}
@@ -57,19 +60,14 @@ jobs:
       #- name: Test
       #  run: dotnet test ${{ env.SOLUTION_PATH }} --configuration Release --no-restore --no-build --verbosity normal
       
-      - name: Run Tests with Coverage
-        run: |
-          dotnet test ${{ env.SOLUTION_PATH }} \
-            --configuration Release \
-            --no-build \
-            /p:CollectCoverage=true \
-            /p:CoverletOutputFormat=opencover \
-            /p:CoverletOutput=./TestResults/coverage.opencover.xml
+      - name: Run unit tests
+        run: dotnet test BPCalculator.Unit.Tests/BPCalculator.Unit.Tests.csproj /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=./coverage.xml --configuration Release
 
-      - name: SonarQube End Analysis
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
+      - name: Sonar Scanner End Analysis
+        run: |
+          dotnet sonarscanner end \
+            /d:sonar.login=${{ secrets.SONAR_TOKEN }}
+
 
       - name: Publish
         run: dotnet publish ${{ env.API_PROJECT_PATH }} --configuration Release --no-restore --no-build --property:PublishDir=${{ env.PUBLISH_DIR }}
