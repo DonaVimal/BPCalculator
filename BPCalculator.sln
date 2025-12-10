@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BPCalculator.Unit.Tests", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BPCalculator.Reqnroll.BDDTests", "BPCalculator.Reqnroll.BDDTests\BPCalculator.Reqnroll.BDDTests.csproj", "{0B7CF38C-1624-4BFA-AEA7-201D7E1A3A8A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BPCalculator.E2ETests", "BPCalculator.E2ETests\BPCalculator.E2ETests.csproj", "{AB844221-8833-4ACD-ADAF-FC57A07478C5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{0B7CF38C-1624-4BFA-AEA7-201D7E1A3A8A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0B7CF38C-1624-4BFA-AEA7-201D7E1A3A8A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0B7CF38C-1624-4BFA-AEA7-201D7E1A3A8A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AB844221-8833-4ACD-ADAF-FC57A07478C5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AB844221-8833-4ACD-ADAF-FC57A07478C5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AB844221-8833-4ACD-ADAF-FC57A07478C5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AB844221-8833-4ACD-ADAF-FC57A07478C5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
