@@ -91,7 +91,17 @@ jobs:
         run: dotnet-sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"    
 
       - name: Publish
-        run: dotnet publish ${{ env.API_PROJECT_PATH }} --configuration Release --no-restore --no-build --property:PublishDir=${{ env.PUBLISH_DIR }}
+        run: dotnet publish ${{ env.API_PROJECT_PATH }} \
+             --configuration Release \
+             --no-restore --no-build \
+             --property:PublishDir=${{ env.PUBLISH_DIR }}
+      
+      # upload the published web app
+      - name: Upload WebApp Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webapp              # must match what deploy job expects
+          path: ${{ env.PUBLISH_DIR }}
       
       # Store the published output as an artifact for later jobs
       - name: Upload Artifacts
