@@ -1,7 +1,5 @@
-# Name of the workflow as it appears in GitHub Actions UI
 name: BPCalculator CI/CD
 
-# Define triggers for Master, Dev, and QA
 on:
   workflow_dispatch:
   push:
@@ -16,12 +14,11 @@ on:
       - qa
 
 env:
-  # NOTE: AZURE_WEBAPP_NAME is removed here because it is calculated dynamically below
-  AZURE_WEBAPP_PACKAGE_PATH: "./BPCalculator/publish"
   DOTNET_VERSION: "9.x"
   SOLUTION_PATH: "BPCalculator.sln"
   API_PROJECT_PATH: "BPCalculator"
   PUBLISH_DIR: "./publish"
+  AZURE_WEBAPP_PACKAGE_PATH: "./BPCalculator/publish"
   
   # SonarCloud Configuration
   SONAR_HOST_URL: "https://sonarcloud.io"
@@ -40,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # CRITICAL: Required for SonarCloud to detect branch history correctly
+          fetch-depth: 0  # CRITICAL: Required for SonarCloud to detect branch history
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -54,7 +51,7 @@ jobs:
           echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       - name: SonarQube Begin Analysis
-        # CRITICAL: We pass /d:sonar.branch.name so SonarCloud knows this is 'dev' or 'qa'
+        # FIXED: Added /d:sonar.branch.name to force correct branch reporting
         run: |
           dotnet sonarscanner begin \
             /k:"${{ env.SONAR_PROJECT_KEY }}" \
@@ -99,28 +96,19 @@ jobs:
       - name: Publish
         run: dotnet publish ${{ env.API_PROJECT_PATH }} --configuration Release --no-restore --no-build --output ${{ env.PUBLISH_DIR }}
 
-      # upload the published web app
       - name: Upload WebApp Artifact
         uses: actions/upload-artifact@v4
         with:
           name: webapp
           path: ${{ env.PUBLISH_DIR }}
-
-      # Store the published output as an artifact for later jobs
-      - name: Upload Test Results
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: TestReports/
   
   # ==============================================================================
-  # JOB 2: DEPLOY TO AZURE (DYNAMIC ENVIRONMENTS + APP INSIGHTS)
+  # JOB 2: DEPLOY TO AZURE (DYNAMIC ENVIRONMENTS)
   # ==============================================================================
   deploy:
     name: Deploy to Azure
     runs-on: ubuntu-latest
     needs: [build-and-test]
-    # Export URL for test jobs
     outputs:
       webapp_url: ${{ steps.set-vars.outputs.webapp_url }}
       webapp_name: ${{ steps.set-vars.outputs.webapp_name }}
@@ -137,32 +125,28 @@ jobs:
         id: set-vars
         run: |
           if [[ "${{ github.ref_name }}" == "dev" ]]; then
-            echo "Setting up for DEV environment..."
             echo "webapp_name=BPBloodPressure-Dev" >> $GITHUB_OUTPUT
             echo "webapp_url=https://BPBloodPressure-Dev.azurewebsites.net" >> $GITHUB_OUTPUT
-          
           elif [[ "${{ github.ref_name }}" == "qa" ]]; then
-            echo "Setting up for QA environment..."
             echo "webapp_name=BPBloodPressure-QA" >> $GITHUB_OUTPUT
             echo "webapp_url=https://BPBloodPressure-QA.azurewebsites.net" >> $GITHUB_OUTPUT
-          
           else
-            echo "Setting up for PRODUCTION environment..."
             echo "webapp_name=BPBloodPressure" >> $GITHUB_OUTPUT
             echo "webapp_url=https://BPBloodPressure.azurewebsites.net" >> $GITHUB_OUTPUT
           fi
 
-      # 1. DEPLOY TO DEV (With DEV App Insights)
+      # DEPLOY TO DEV (This connects your secret AZURE_WEBAPP_PUBLISH_PROFILE_DEV)
       - name: Deploy to DEV
         if: github.ref_name == 'dev'
         uses: azure/webapps-deploy@v2
         with:
           app-name: ${{ steps.set-vars.outputs.webapp_name }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_DEV }}
+          # THIS LINE FIXES YOUR "NO CREDENTIALS" ERROR:
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_DEV }} 
           package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
           configuration-settings: 'APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CONN_STRING_DEV }}'
 
-      # 2. DEPLOY TO QA (With QA App Insights)
+      # DEPLOY TO QA
       - name: Deploy to QA
         if: github.ref_name == 'qa'
         uses: azure/webapps-deploy@v2
@@ -172,7 +156,7 @@ jobs:
           package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
           configuration-settings: 'APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CONN_STRING_QA }}'
 
-      # 3. DEPLOY TO PRODUCTION (With PROD App Insights)
+      # DEPLOY TO PROD
       - name: Deploy to PROD
         if: github.ref_name == 'master'
         uses: azure/webapps-deploy@v2
@@ -183,12 +167,12 @@ jobs:
           configuration-settings: 'APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CONN_STRING_PROD }}'
 
   # ==============================================================================
-  # JOB 3: E2E TESTS (Uses Dynamic URL)
+  # JOB 3: E2E TESTS
   # ==============================================================================
   e2e-tests:
     name: Run E2E Tests (Playwright)
     runs-on: ubuntu-latest
-    needs: deploy # Wait for deploy to finish
+    needs: deploy 
     
     steps:
       - uses: actions/checkout@v4
@@ -198,37 +182,31 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      # Build the Test Project specifically
       - name: Build E2E Tests
         run: dotnet build BPCalculator.E2ETests/BPCalculator.E2ETests.csproj --configuration Release
 
-      # Install the required browsers for Playwright
       - name: Install Playwright Browsers
         run: pwsh BPCalculator.E2ETests/bin/Release/net9.0/playwright.ps1 install
 
-      # Run the tests pointing to the Azure URL
       - name: Run Playwright Tests
         env:
-          # Uses the URL output from the deploy job
           AppUrl: ${{ needs.deploy.outputs.webapp_url }}
         run: dotnet test BPCalculator.E2ETests/BPCalculator.E2ETests.csproj --configuration Release --logger "trx;LogFileName=e2e_results.trx"
   
   # ==============================================================================
-  # JOB 4: PERFORMANCE TESTS (Uses Dynamic URL)
+  # JOB 4: PERFORMANCE TESTS
   # ==============================================================================
   performance-test:
     name: Run Performance Tests (k6)
     runs-on: ubuntu-latest
-    needs: deploy # Must wait for the site to be live
+    needs: deploy
     
     steps:
       - uses: actions/checkout@v4
 
-      # Run k6 using the official GitHub Action
       - name: Run k6 Load Test
         uses: grafana/k6-action@v0.3.0
         env:
-          # Uses the URL output from the deploy job
           APP_URL: ${{ needs.deploy.outputs.webapp_url }}
         with:
           filename: bp-load-test.js
