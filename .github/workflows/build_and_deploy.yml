@@ -51,7 +51,6 @@ jobs:
           echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       - name: SonarQube Begin Analysis
-        # FIXED: Added /d:sonar.branch.name to force correct branch reporting
         run: |
           dotnet sonarscanner begin \
             /k:"${{ env.SONAR_PROJECT_KEY }}" \
@@ -103,7 +102,7 @@ jobs:
           path: ${{ env.PUBLISH_DIR }}
   
   # ==============================================================================
-  # JOB 2: DEPLOY TO AZURE (DYNAMIC ENVIRONMENTS)
+  # JOB 2: DEPLOY TO AZURE
   # ==============================================================================
   deploy:
     name: Deploy to Azure
@@ -126,22 +125,24 @@ jobs:
         run: |
           if [[ "${{ github.ref_name }}" == "dev" ]]; then
             echo "webapp_name=BPBloodPressure-Dev" >> $GITHUB_OUTPUT
-            echo "webapp_url=https://BPBloodPressure-Dev.azurewebsites.net" >> $GITHUB_OUTPUT
+            # FIXED: Updated to your exact Dev URL
+            echo "webapp_url=https://bpbloodpressure-dev-h6a2dbbvc6g2awc7.uksouth-01.azurewebsites.net" >> $GITHUB_OUTPUT
+          
           elif [[ "${{ github.ref_name }}" == "qa" ]]; then
             echo "webapp_name=BPBloodPressure-QA" >> $GITHUB_OUTPUT
             echo "webapp_url=https://BPBloodPressure-QA.azurewebsites.net" >> $GITHUB_OUTPUT
+          
           else
             echo "webapp_name=BPBloodPressure" >> $GITHUB_OUTPUT
             echo "webapp_url=https://BPBloodPressure.azurewebsites.net" >> $GITHUB_OUTPUT
           fi
 
-      # DEPLOY TO DEV (This connects your secret AZURE_WEBAPP_PUBLISH_PROFILE_DEV)
+      # DEPLOY TO DEV
       - name: Deploy to DEV
         if: github.ref_name == 'dev'
         uses: azure/webapps-deploy@v2
         with:
           app-name: ${{ steps.set-vars.outputs.webapp_name }}
-          # THIS LINE FIXES YOUR "NO CREDENTIALS" ERROR:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_DEV }} 
           package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
           configuration-settings: 'APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CONN_STRING_DEV }}'
@@ -156,7 +157,7 @@ jobs:
           package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
           configuration-settings: 'APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CONN_STRING_QA }}'
 
-      # DEPLOY TO PROD
+      # DEPLOY TO PROD (Master)
       - name: Deploy to PROD
         if: github.ref_name == 'master'
         uses: azure/webapps-deploy@v2
