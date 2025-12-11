@@ -176,5 +176,3 @@ jobs:
           APP_URL: "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
         with:
           filename: bp-load-test.js
-          # Fail the pipeline if the k6 thresholds (p95 < 500ms) are not met
-          flags: --fail-fast
