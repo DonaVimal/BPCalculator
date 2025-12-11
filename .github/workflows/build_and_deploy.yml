@@ -129,6 +129,10 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
+          # --- APPLICATION INSIGHTS ---
+          # This sets the environment variable in the Azure Web App configuration
+          configuration-settings: 'APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CONN_STRING }}'
+
 
   # Third job: Run E2E Tests against the live Azure site
   e2e-tests:

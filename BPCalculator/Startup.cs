@@ -27,6 +27,8 @@ namespace BPCalculator
             // In-memory cache for session (good for dev)
             services.AddDistributedMemoryCache();
 
+            // In Program.cs
+            services.AddApplicationInsightsTelemetry();
             // Add session support
             services.AddSession(options =>
             {
