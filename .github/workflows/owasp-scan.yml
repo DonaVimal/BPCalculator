@@ -1,0 +1,61 @@
+name: OWASP Security Scan
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "master", "dev", "qa" ]
+  pull_request:
+    branches: [ "master", "dev", "qa" ]
+
+env:
+  DOTNET_VERSION: "9.x"
+  SOLUTION_PATH: "BPCalculator.sln"
+
+jobs:
+  owasp-scan:
+    name: Dependency Vulnerability Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # Building ensures all transitive dependencies (DLLs) are resolved and available for analysis
+      - name: Build Solution
+        run: |
+          dotnet restore ${{ env.SOLUTION_PATH }}
+          dotnet build ${{ env.SOLUTION_PATH }} --configuration Release
+
+      - name: Run OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        id: depcheck
+        with:
+          project: 'BPCalculator'
+          path: '.'
+          format: 'ALL' # Generates HTML (for artifacts) and SARIF (for GitHub Security)
+          out: 'reports'
+          # ARGS: Fail if CVSS score is 7.0+ (High/Critical)
+          args: >
+            --failOnCVSS 7
+            --enableExperimental
+
+      # Upload the HTML report so you can download and view it manually
+      - name: Upload Scan Report
+        uses: actions/upload-artifact@v4
+        if: always() # Ensure report is uploaded even if the scan fails due to vulnerabilities
+        with:
+          name: OWASP-Dependency-Report
+          path: reports/dependency-check-report.html
+
+      # Upload results to GitHub "Security" tab (Requires public repo or GH Advanced Security)
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        continue-on-error: true # Don't fail pipeline if SARIF upload is not supported on your plan
+        with:
+           sarif_file: reports/dependency-check-report.sarif

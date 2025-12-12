@@ -37,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # CRITICAL: Required for SonarCloud to detect branch history
+          fetch-depth: 0 
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -95,12 +95,21 @@ jobs:
       - name: Publish
         run: dotnet publish ${{ env.API_PROJECT_PATH }} --configuration Release --no-restore --no-build --output ${{ env.PUBLISH_DIR }}
 
+      # --- ARTIFACT UPLOAD 1: WebApp Package ---
       - name: Upload WebApp Artifact
         uses: actions/upload-artifact@v4
         with:
           name: webapp
           path: ${{ env.PUBLISH_DIR }}
-  
+
+      # --- ARTIFACT UPLOAD 2: Unit Test & Coverage Reports ---
+      - name: Upload Test & Coverage Reports
+        if: always() 
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-coverage-reports
+          path: TestReports/
+
   # ==============================================================================
   # JOB 2: DEPLOY TO AZURE
   # ==============================================================================
@@ -119,13 +128,11 @@ jobs:
           name: webapp
           path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
-      # LOGIC: Set App Name and URL based on Branch
       - name: Set Environment Variables
         id: set-vars
         run: |
           if [[ "${{ github.ref_name }}" == "dev" ]]; then
             echo "webapp_name=BPBloodPressure-Dev" >> $GITHUB_OUTPUT
-            # FIXED: Updated to your exact Dev URL
             echo "webapp_url=https://bpbloodpressure-dev-h6a2dbbvc6g2awc7.uksouth-01.azurewebsites.net" >> $GITHUB_OUTPUT
           
           elif [[ "${{ github.ref_name }}" == "qa" ]]; then
@@ -137,7 +144,6 @@ jobs:
             echo "webapp_url=https://BPBloodPressure.azurewebsites.net" >> $GITHUB_OUTPUT
           fi
 
-      # DEPLOY TO DEV
       - name: Deploy to DEV
         if: github.ref_name == 'dev'
         uses: azure/webapps-deploy@v2
@@ -147,20 +153,18 @@ jobs:
           package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
           configuration-settings: 'APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CONN_STRING_DEV }}'
 
-      # DEPLOY TO QA
       - name: Deploy to QA
         if: github.ref_name == 'qa'
-        uses: azure/webapps-deploy@v2
+        uses: azure/webapps-deploy@2f8dc2a99042b4b45d04e768723f50800d1e5631
         with:
           app-name: ${{ steps.set-vars.outputs.webapp_name }}
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_QA }}
           package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
           configuration-settings: 'APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CONN_STRING_QA }}'
 
-      # DEPLOY TO PROD (Master)
       - name: Deploy to PROD
         if: github.ref_name == 'master'
-        uses: azure/webapps-deploy@v2
+        uses: azure/webapps-deploy@2f8dc2a99042b4b45d04e768723f50800d1e5631
         with:
           app-name: ${{ steps.set-vars.outputs.webapp_name }}
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
@@ -193,7 +197,17 @@ jobs:
         env:
           AppUrl: ${{ needs.deploy.outputs.webapp_url }}
         run: dotnet test BPCalculator.E2ETests/BPCalculator.E2ETests.csproj --configuration Release --logger "trx;LogFileName=e2e_results.trx"
-  
+
+      # --- ARTIFACT UPLOAD 3: E2E Test Results ---
+      - name: Upload E2E Test Results
+        if: always() 
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: |
+            **/e2e_results.trx
+            **/TestResults/**
+
   # ==============================================================================
   # JOB 4: PERFORMANCE TESTS
   # ==============================================================================
@@ -211,3 +225,60 @@ jobs:
           APP_URL: ${{ needs.deploy.outputs.webapp_url }}
         with:
           filename: bp-load-test.js
+          flags: --out json=k6_results.json 
+
+      # --- ARTIFACT UPLOAD 4: k6 Performance Results ---
+      - name: Upload k6 Results
+        if: always() 
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-performance-results
+          path: k6_results.json
+
+  # ==============================================================================
+  # JOB 5: BDD TESTS (SpecFlow/Reqnroll)
+  # ==============================================================================
+  bdd-tests:
+    name: Run BDD Tests (SpecFlow)
+    runs-on: ubuntu-latest
+    needs: deploy
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install SpecFlow LivingDoc CLI
+        run: dotnet tool install --global SpecFlow.Plus.LivingDoc.CLI
+
+      # Runs the tests, passing the URL of the deployed app
+      # Important: Updates the bdd project path if yours is named differently (e.g. BPCalculator.Specs)
+      - name: Run BDD Tests
+        env:
+          AppUrl: ${{ needs.deploy.outputs.webapp_url }}
+        run: |
+          dotnet test BPCalculator.BDD.Tests/BPCalculator.BDD.Tests.csproj \
+            --configuration Release \
+            --logger "trx;LogFileName=bdd_results.trx" \
+            --results-directory TestReports
+
+      # Generates the HTML Report (LivingDoc) from the test assembly and execution JSON
+      - name: Generate LivingDoc Report
+        if: always()
+        run: |
+          livingdoc test-assembly BPCalculator.BDD.Tests/bin/Release/net9.0/BPCalculator.BDD.Tests.dll \
+            -t BPCalculator.BDD.Tests/bin/Release/net9.0/TestExecution.json \
+            -o LivingDoc.html
+
+      # --- ARTIFACT UPLOAD 5: BDD Results (HTML & TRX) ---
+      - name: Upload BDD Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bdd-livingdoc-report
+          path: |
+            LivingDoc.html
+            TestReports/bdd_results.trx
