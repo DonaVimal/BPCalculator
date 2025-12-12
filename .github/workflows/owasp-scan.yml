@@ -30,7 +30,7 @@ jobs:
           dotnet restore ${{ env.SOLUTION_PATH }}
           dotnet build ${{ env.SOLUTION_PATH }} --configuration Release
 
-      # Dependency-Check requires Java — install it before running the action
+      # Dependency-Check needs Java. Use setup-java to install it.
       - name: Setup Java (required by OWASP Dependency-Check)
         uses: actions/setup-java@v4
         with:
@@ -41,12 +41,15 @@ jobs:
         run: mkdir -p reports
 
       - name: Run OWASP Dependency-Check
-        # Pinned to a valid full commit SHA from the action repo to satisfy policy
-        uses: dependency-check/Dependency-Check_Action@bd32f0723e147bcb477ba0a79e99d912ed9fbb7f
+        # Valid full commit SHA from dependency-check/Dependency-Check_Action repository
+        uses: dependency-check/Dependency-Check_Action@1e54355a8b4c8abaa8cc7d0b70aa655a3bb15a6c
         id: depcheck
         env:
-          # The action reads the API key from NVD_API_KEY env var
+          # The action reads the NVD key from this env var
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+          # README for the action warns that setup-java changes JAVA_HOME;
+          # reset it to match the value used in the action's Docker image so the tool works.
+          JAVA_HOME: /opt/jdk
         with:
           project: 'BPCalculator'
           path: '.'
