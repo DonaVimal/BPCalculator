@@ -63,8 +63,8 @@ jobs:
             /d:sonar.branch.name="${{ github.ref_name }}" \
             /d:sonar.host.url="${{ env.SONAR_HOST_URL }}" \
             /d:sonar.token="${{ env.SONAR_TOKEN }}" \
-            /d:sonar.exclusions="**/Program.cs,**/Startup.cs,**/Pages/**" \
-            /d:sonar.coverage.exclusions="**/Program.cs,**/Startup.cs,**/Pages/**" \
+            /d:sonar.exclusions="**/Program.cs,**/Startup.cs,**/Pages/**", \
+            /d:sonar.coverage.exclusions="**/Program.cs,**/Startup.cs,**/Pages/**,bp-load-test.js" \
             /d:sonar.cs.opencover.reportsPaths="TestReports/coverage.xml"
 
       - name: Restore
