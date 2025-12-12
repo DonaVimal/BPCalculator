@@ -25,15 +25,12 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      # Building ensures all transitive dependencies (DLLs) are resolved
       - name: Build Solution
         run: |
           dotnet restore ${{ env.SOLUTION_PATH }}
           dotnet build ${{ env.SOLUTION_PATH }} --configuration Release
 
-      # --- FIX START: Caching Strategy ---
-      # This step caches the vulnerability database so you don't download 
-      # the whole internet every time (which causes the EOF error).
+      # Cache the NVD database to prevent download errors (EOF)
       - name: Cache OWASP NVD Data
         uses: actions/cache@v4
         with:
@@ -41,11 +38,10 @@ jobs:
           key: ${{ runner.os }}-dependency-check-data-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-dependency-check-data-
-      # --- FIX END ---
 
       - name: Run OWASP Dependency-Check
-        # Pinning to a specific version is safer than @main
-        uses: dependency-check/Dependency-Check_Action@v2.5.1
+        # FIX: Use @main as this action does not use semantic version tags like v2.5.1
+        uses: dependency-check/Dependency-Check_Action@main
         id: depcheck
         with:
           project: 'BPCalculator'
@@ -53,16 +49,12 @@ jobs:
           format: 'ALL'
           out: 'reports'
           nvdApiKey: ${{ secrets.NVD_API_KEY }}
-          # ARGS Explanation:
-          # --data: Points the tool to use our cached folder defined above
-          # --nvdApiDelay: Adds a 2s delay between requests to stop the NVD server from cutting connection
-          # --failOnCVSS: Fail on High/Critical vulnerabilities
+          # ARGS: Point to the cached data folder and add a delay to prevent connection resets
           args: >
             --failOnCVSS 7
             --data dependency-check-data
             --nvdApiDelay 2000
 
-      # Upload the HTML report
       - name: Upload Scan Report
         uses: actions/upload-artifact@v4
         if: always() 
@@ -70,7 +62,6 @@ jobs:
           name: OWASP-Dependency-Report
           path: reports/dependency-check-report.html
 
-      # Upload results to GitHub Security tab
       - name: Upload SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
