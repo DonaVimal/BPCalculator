@@ -1,0 +1,72 @@
+name: OWASP Security Scan
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "master", "dev", "qa" ]
+  pull_request:
+    branches: [ "master", "dev", "qa" ]
+
+env:
+  DOTNET_VERSION: "9.x"
+  SOLUTION_PATH: "BPCalculator.sln"
+
+jobs:
+  owasp-scan:
+    name: Dependency Vulnerability Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Build Solution
+        run: |
+          dotnet restore ${{ env.SOLUTION_PATH }}
+          dotnet build ${{ env.SOLUTION_PATH }} --configuration Release
+
+      # Dependency-Check needs Java. Use setup-java to install it.
+      - name: Setup Java (required by OWASP Dependency-Check)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Ensure reports dir exists
+        run: mkdir -p reports
+
+      - name: Run OWASP Dependency-Check
+        # Valid full commit SHA from dependency-check/Dependency-Check_Action repository
+        uses: dependency-check/Dependency-Check_Action@1e54355a8b4c8abaa8cc7d0b70aa655a3bb15a6c
+        id: depcheck
+        env:
+          # The action reads the NVD key from this env var
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+          # reset it to match the value used in the action's Docker image so the tool works.
+          JAVA_HOME: /opt/jdk
+        with:
+          project: 'BPCalculator'
+          path: '.'
+          format: 'ALL'
+          out: 'reports'
+          # If you want the job to fail on CVSS >= X, uncomment and set the value:
+          # failOnCVSS: '9'
+
+      - name: Upload Scan Report (HTML)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OWASP-Dependency-Report
+          path: reports/dependency-check-report.html
+
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: reports/dependency-check-report.sarif
