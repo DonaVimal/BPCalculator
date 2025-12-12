@@ -271,7 +271,7 @@ jobs:
       # 2. Visualize Results in GitHub (No HTML file needed)
       - name: Publish Test Report
         if: always() # Run even if tests fail
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@c4b116352f4d2d35a6af61f7f6f90fc4e701935b
         with:
           name: BDD Scenarios Report
           path: "TestReports/bdd_results.trx"
