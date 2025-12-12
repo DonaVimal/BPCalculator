@@ -15,7 +15,7 @@ jobs:
   owasp-scan:
     name: Dependency Vulnerability Check
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -30,34 +30,41 @@ jobs:
           dotnet restore ${{ env.SOLUTION_PATH }}
           dotnet build ${{ env.SOLUTION_PATH }} --configuration Release
 
+      # Dependency-Check requires Java — install it before running the action
+      - name: Setup Java (required by OWASP Dependency-Check)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Ensure reports dir exists
+        run: mkdir -p reports
+
       - name: Run OWASP Dependency-Check
-        uses: dependency-check/Dependency-Check_Action@3c50c296e204b3d47a42442cfc3b4c6f4de8a1fd
-        # FIX 1: Pass the API Key as an Environment Variable (The Action ignores it in 'with:')
-        env:
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        # Pinned to a valid full commit SHA from the action repo to satisfy policy
+        uses: dependency-check/Dependency-Check_Action@bd32f0723e147bcb477ba0a79e99d912ed9fbb7f
         id: depcheck
+        env:
+          # The action reads the API key from NVD_API_KEY env var
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         with:
           project: 'BPCalculator'
           path: '.'
           format: 'ALL'
           out: 'reports'
-          # FIX 2: Removed 'nvdApiKey' from here (it was invalid)
-          # FIX 3: Removed '--data' and '--nvdApiDelay' args. 
-          # We now rely on the Action's internal database which is updated nightly.
-          # This avoids the "Database does not exist" error.
-          #args: >
-          #  --failOnCVSS 7
+          # If you want the job to fail on CVSS >= X, uncomment and set the value:
+          # failOnCVSS: '9'
 
-      - name: Upload Scan Report
+      - name: Upload Scan Report (HTML)
+        if: always()
         uses: actions/upload-artifact@v4
-        if: always() 
         with:
           name: OWASP-Dependency-Report
           path: reports/dependency-check-report.html
 
       - name: Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
         if: always()
-        continue-on-error: true 
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
         with:
-           sarif_file: reports/dependency-check-report.sarif
+          sarif_file: reports/dependency-check-report.sarif
