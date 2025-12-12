@@ -236,10 +236,10 @@ jobs:
           path: k6_results.json
 
   # ==============================================================================
-  # JOB 5: BDD TESTS (SpecFlow/Reqnroll)
+  # JOB 5: BDD TESTS (Reqnroll/SpecFlow)
   # ==============================================================================
   bdd-tests:
-    name: Run BDD Tests (SpecFlow)
+    name: Run BDD Tests (Reqnroll)
     runs-on: ubuntu-latest
     needs: deploy
     
@@ -254,23 +254,22 @@ jobs:
       - name: Install SpecFlow LivingDoc CLI
         run: dotnet tool install --global SpecFlow.Plus.LivingDoc.CLI
 
-      # Runs the tests, passing the URL of the deployed app
-      # Important: Updates the bdd project path if yours is named differently (e.g. BPCalculator.Specs)
+      # Runs the tests using the CORRECT project name found in your screenshot
       - name: Run BDD Tests
         env:
           AppUrl: ${{ needs.deploy.outputs.webapp_url }}
         run: |
-          dotnet test BPCalculator.BDD.Tests/BPCalculator.BDD.Tests.csproj \
+          dotnet test BPCalculator.Reqnroll.BDDTests/BPCalculator.Reqnroll.BDDTests.csproj \
             --configuration Release \
             --logger "trx;LogFileName=bdd_results.trx" \
             --results-directory TestReports
 
-      # Generates the HTML Report (LivingDoc) from the test assembly and execution JSON
+      # Generates the HTML Report (LivingDoc) using the correct DLL path
       - name: Generate LivingDoc Report
-        if: always()
+        if: always() 
         run: |
-          livingdoc test-assembly BPCalculator.BDD.Tests/bin/Release/net9.0/BPCalculator.BDD.Tests.dll \
-            -t BPCalculator.BDD.Tests/bin/Release/net9.0/TestExecution.json \
+          livingdoc test-assembly BPCalculator.Reqnroll.BDDTests/bin/Release/net9.0/BPCalculator.Reqnroll.BDDTests.dll \
+            -t BPCalculator.Reqnroll.BDDTests/bin/Release/net9.0/TestExecution.json \
             -o LivingDoc.html
 
       # --- ARTIFACT UPLOAD 5: BDD Results (HTML & TRX) ---
