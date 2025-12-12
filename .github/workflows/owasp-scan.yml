@@ -30,30 +30,23 @@ jobs:
           dotnet restore ${{ env.SOLUTION_PATH }}
           dotnet build ${{ env.SOLUTION_PATH }} --configuration Release
 
-      # Cache the NVD database to prevent download errors (EOF)
-      - name: Cache OWASP NVD Data
-        uses: actions/cache@v4
-        with:
-          path: dependency-check-data
-          key: ${{ runner.os }}-dependency-check-data-${{ github.run_id }}
-          restore-keys: |
-            ${{ runner.os }}-dependency-check-data-
-
       - name: Run OWASP Dependency-Check
-        # FIX: Use @main as this action does not use semantic version tags like v2.5.1
         uses: dependency-check/Dependency-Check_Action@main
+        # FIX 1: Pass the API Key as an Environment Variable (The Action ignores it in 'with:')
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         id: depcheck
         with:
           project: 'BPCalculator'
           path: '.'
           format: 'ALL'
           out: 'reports'
-          nvdApiKey: ${{ secrets.NVD_API_KEY }}
-          # ARGS: Point to the cached data folder and add a delay to prevent connection resets
+          # FIX 2: Removed 'nvdApiKey' from here (it was invalid)
+          # FIX 3: Removed '--data' and '--nvdApiDelay' args. 
+          # We now rely on the Action's internal database which is updated nightly.
+          # This avoids the "Database does not exist" error.
           args: >
             --failOnCVSS 7
-            --data dependency-check-data
-            --nvdApiDelay 2000
 
       - name: Upload Scan Report
         uses: actions/upload-artifact@v4
