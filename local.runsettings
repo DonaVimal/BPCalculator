@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+    <RunConfiguration>
+        <EnvironmentVariables>
+            <AppUrl>https://bpbloodpressure-dev-h6a2dbbvc6g2awc7.uksouth-01.azurewebsites.net</AppUrl>
+        </EnvironmentVariables>
+    </RunConfiguration>
+</RunSettings>

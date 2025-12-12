@@ -1,4 +1,4 @@
-﻿using Microsoft.Playwright;
+using Microsoft.Playwright;
 using Microsoft.Playwright.MSTest; // <--- Important for MSTest base classes
 using Microsoft.VisualStudio.TestTools.UnitTesting; // <--- Standard MSTest namespace
 using System.Threading.Tasks;
@@ -10,8 +10,7 @@ namespace BPCalculator.E2ETests
     {
         // Remove the 'const' string and replace with this property:
         private string AppUrl => Environment.GetEnvironmentVariable("AppUrl")
-                                 ?? "http://localhost:5038"; // Fallback for local testing
-        //private const string AppUrl = "https://bpbloodpressure.azurewebsites.net/";
+                                 ?? "http://localhost:5038"; // Fallback for local testing        
 
         [TestInitialize]
         public async Task Setup()
