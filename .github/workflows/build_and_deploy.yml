@@ -263,7 +263,6 @@ jobs:
 
       - name: Publish Test Report to Checks
         if: always()
-        # Recommended: use the stable major tag. If your org requires a full SHA, replace @v1 with the full 40-char SHA here.
         uses: dorny/test-reporter@v1
         with:
           name: BDD Scenarios Report

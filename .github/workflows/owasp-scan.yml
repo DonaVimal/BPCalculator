@@ -47,7 +47,6 @@ jobs:
         env:
           # The action reads the NVD key from this env var
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-          # README for the action warns that setup-java changes JAVA_HOME;
           # reset it to match the value used in the action's Docker image so the tool works.
           JAVA_HOME: /opt/jdk
         with:
