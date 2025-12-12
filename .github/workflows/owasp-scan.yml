@@ -25,38 +25,55 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      # Building ensures all transitive dependencies (DLLs) are resolved and available for analysis
+      # Building ensures all transitive dependencies (DLLs) are resolved
       - name: Build Solution
         run: |
           dotnet restore ${{ env.SOLUTION_PATH }}
           dotnet build ${{ env.SOLUTION_PATH }} --configuration Release
 
+      # --- FIX START: Caching Strategy ---
+      # This step caches the vulnerability database so you don't download 
+      # the whole internet every time (which causes the EOF error).
+      - name: Cache OWASP NVD Data
+        uses: actions/cache@v4
+        with:
+          path: dependency-check-data
+          key: ${{ runner.os }}-dependency-check-data-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-dependency-check-data-
+      # --- FIX END ---
+
       - name: Run OWASP Dependency-Check
-        uses: dependency-check/Dependency-Check_Action@main
+        # Pinning to a specific version is safer than @main
+        uses: dependency-check/Dependency-Check_Action@v2.5.1
         id: depcheck
         with:
           project: 'BPCalculator'
           path: '.'
-          format: 'ALL' # Generates HTML (for artifacts) and SARIF (for GitHub Security)
+          format: 'ALL'
           out: 'reports'
           nvdApiKey: ${{ secrets.NVD_API_KEY }}
-          # ARGS: Fail if CVSS score is 7.0+ (High/Critical)
+          # ARGS Explanation:
+          # --data: Points the tool to use our cached folder defined above
+          # --nvdApiDelay: Adds a 2s delay between requests to stop the NVD server from cutting connection
+          # --failOnCVSS: Fail on High/Critical vulnerabilities
           args: >
             --failOnCVSS 7
-            --enableExperimental
+            --data dependency-check-data
+            --nvdApiDelay 2000
 
-      # Upload the HTML report so you can download and view it manually
+      # Upload the HTML report
       - name: Upload Scan Report
         uses: actions/upload-artifact@v4
-        if: always() # Ensure report is uploaded even if the scan fails due to vulnerabilities
+        if: always() 
         with:
           name: OWASP-Dependency-Report
           path: reports/dependency-check-report.html
 
-      # Upload results to GitHub "Security" tab (Requires public repo or GH Advanced Security)
+      # Upload results to GitHub Security tab
       - name: Upload SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
-        continue-on-error: true # Don't fail pipeline if SARIF upload is not supported on your plan
+        continue-on-error: true 
         with:
            sarif_file: reports/dependency-check-report.sarif

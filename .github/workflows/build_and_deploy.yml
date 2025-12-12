@@ -243,6 +243,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: deploy
     
+    # --- ADD THIS BLOCK ---
+    permissions:
+      checks: write       # Allows writing the test report to Checks tab
+      contents: read      # Standard permission to clone the repo
+      pull-requests: write # (Optional) Allows commenting on PRs if configured
+    # ----------------------
+
     steps:
       - uses: actions/checkout@v4
 
