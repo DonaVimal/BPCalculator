@@ -236,7 +236,7 @@ jobs:
           path: k6_results.json
 
   # ==============================================================================
-  # JOB 5: BDD TESTS (Reqnroll/SpecFlow)
+  # JOB 5: BDD TESTS (Reqnroll) - SIMPLIFIED REPORTING
   # ==============================================================================
   bdd-tests:
     name: Run BDD Tests (Reqnroll)
@@ -251,10 +251,7 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Install SpecFlow LivingDoc CLI
-        run: dotnet tool install --global SpecFlow.Plus.LivingDoc.CLI
-
-      # Runs the tests using the CORRECT project name found in your screenshot
+      # 1. Run Tests & Generate Standard TRX File
       - name: Run BDD Tests
         env:
           AppUrl: ${{ needs.deploy.outputs.webapp_url }}
@@ -264,20 +261,20 @@ jobs:
             --logger "trx;LogFileName=bdd_results.trx" \
             --results-directory TestReports
 
-      # Generates the HTML Report (LivingDoc) using the correct DLL path
-      - name: Generate LivingDoc Report
-        if: always() 
-        run: |
-          livingdoc test-assembly BPCalculator.Reqnroll.BDDTests/bin/Release/net9.0/BPCalculator.Reqnroll.BDDTests.dll \
-            -t BPCalculator.Reqnroll.BDDTests/bin/Release/net9.0/TestExecution.json \
-            -o LivingDoc.html
+      # 2. Visualize Results in GitHub (No HTML file needed)
+      - name: Publish Test Report
+        if: always() # Run even if tests fail
+        uses: dorny/test-reporter@v1
+        with:
+          name: BDD Scenarios Report
+          path: "TestReports/bdd_results.trx"
+          reporter: dotnet-trx
+          fail-on-error: false
 
-      # --- ARTIFACT UPLOAD 5: BDD Results (HTML & TRX) ---
+      # 3. Upload Raw TRX File (Backup)
       - name: Upload BDD Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: bdd-livingdoc-report
-          path: |
-            LivingDoc.html
-            TestReports/bdd_results.trx
+          name: bdd-results-trx
+          path: TestReports/bdd_results.trx

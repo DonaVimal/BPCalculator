@@ -39,6 +39,7 @@ jobs:
           path: '.'
           format: 'ALL' # Generates HTML (for artifacts) and SARIF (for GitHub Security)
           out: 'reports'
+          nvdApiKey: ${{ secrets.NVD_API_KEY }}
           # ARGS: Fail if CVSS score is 7.0+ (High/Critical)
           args: >
             --failOnCVSS 7
