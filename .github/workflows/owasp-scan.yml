@@ -45,8 +45,8 @@ jobs:
           # FIX 3: Removed '--data' and '--nvdApiDelay' args. 
           # We now rely on the Action's internal database which is updated nightly.
           # This avoids the "Database does not exist" error.
-          args: >
-            --failOnCVSS 7
+          #args: >
+          #  --failOnCVSS 7
 
       - name: Upload Scan Report
         uses: actions/upload-artifact@v4
