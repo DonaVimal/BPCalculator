@@ -1,4 +1,4 @@
-name: CI / OWASP / E2E / BDD
+name: CI / E2E / BDD - Blue/Green Hybrid
 
 on:
   workflow_dispatch:
@@ -25,10 +25,13 @@ env:
   SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
   SONAR_ORG: ${{ secrets.SONAR_ORG }}
   SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  
+  # Base App Name (Prod)
+  PROD_APP_NAME: BPBloodPressure
 
 jobs:
   # ====================================================================
-  # JOB 1: BUILD, TEST, AND SONAR ANALYSIS
+  # JOB 1: BUILD, TEST, AND SONAR ANALYSIS (Unchanged)
   # ====================================================================
   build-and-test:
     name: Build and Unit Test
@@ -110,12 +113,15 @@ jobs:
           path: TestReports/
 
   # ====================================================================
-  # JOB 2: DEPLOY TO AZURE
+  # JOB 2: DEPLOY TO AZURE (Updated for Blue/Green on Master)
   # ====================================================================
   deploy:
     name: Deploy to Azure
     runs-on: ubuntu-latest
     needs: build-and-test
+    # ADD THIS LINE: Only run deploy/tests if we are on specific branches
+    if: github.ref_name == 'master' || github.ref_name == 'dev' || github.ref_name == 'qa'
+    
     outputs:
       webapp_url: ${{ steps.set-vars.outputs.webapp_url }}
       webapp_name: ${{ steps.set-vars.outputs.webapp_name }}
@@ -127,6 +133,9 @@ jobs:
           name: webapp
           path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
+      # --------------------------------------------------------
+      # Logic Update: Master now points to STAGING URL
+      # --------------------------------------------------------
       - name: Set Environment Variables
         id: set-vars
         run: |
@@ -137,8 +146,9 @@ jobs:
             echo "webapp_name=BPBloodPressure-QA" >> $GITHUB_OUTPUT
             echo "webapp_url=https://BPBloodPressure-QA.azurewebsites.net" >> $GITHUB_OUTPUT
           else
-            echo "webapp_name=BPBloodPressure" >> $GITHUB_OUTPUT
-            echo "webapp_url=https://BPBloodPressure.azurewebsites.net" >> $GITHUB_OUTPUT
+            # MASTER BRANCH: Point to the staging URL for testing
+            echo "webapp_name=${{ env.PROD_APP_NAME }}" >> $GITHUB_OUTPUT
+            echo "webapp_url=https://${{ env.PROD_APP_NAME }}-staging.azurewebsites.net" >> $GITHUB_OUTPUT
           fi
 
       - name: Deploy to DEV
@@ -159,13 +169,19 @@ jobs:
           package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
           configuration-settings: 'APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CONN_STRING_QA }}'
 
-      - name: Deploy to PROD
+      # --------------------------------------------------------
+      # Update: Deploy to STAGING Slot on Master
+      # --------------------------------------------------------
+      - name: Deploy to PROD (Staging Slot)
         if: github.ref_name == 'master'
         uses: azure/webapps-deploy@v2
         with:
           app-name: ${{ steps.set-vars.outputs.webapp_name }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          # MUST USE THE STAGING PROFILE
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_STAGING }}
           package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
+          # TARGET THE SLOT
+          slot-name: staging
           configuration-settings: 'APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CONN_STRING_PROD }}'
 
   # ====================================================================
@@ -192,6 +208,7 @@ jobs:
 
       - name: Run Playwright Tests
         env:
+          # Automatically picks up Staging URL on Master
           AppUrl: ${{ needs.deploy.outputs.webapp_url }}
         run: dotnet test BPCalculator.E2ETests/BPCalculator.E2ETests.csproj --configuration Release --logger "trx;LogFileName=e2e_results.trx"
 
@@ -218,6 +235,7 @@ jobs:
       - name: Run k6 Load Test
         uses: grafana/k6-action@v0.3.0
         env:
+          # Automatically picks up Staging URL on Master
           APP_URL: ${{ needs.deploy.outputs.webapp_url }}
         with:
           filename: bp-load-test.js
@@ -231,7 +249,7 @@ jobs:
           path: k6_results.json
 
   # ====================================================================
-  # JOB 5: BDD TESTS (Reqnroll) - simplified reporting
+  # JOB 5: BDD TESTS (Reqnroll)
   # ====================================================================
   bdd-tests:
     name: Run BDD Tests (Reqnroll)
@@ -253,6 +271,7 @@ jobs:
 
       - name: Run BDD Tests
         env:
+          # Automatically picks up Staging URL on Master
           AppUrl: ${{ needs.deploy.outputs.webapp_url }}
         run: |
           mkdir -p TestReports
