@@ -155,7 +155,7 @@ jobs:
 
       - name: Deploy to QA
         if: github.ref_name == 'qa'
-        uses: azure/webapps-deploy@2f8dc2a99042b4b45d04e768723f50800d1e5631
+        uses: azure/webapps-deploy@122b7ec46017e53a3f71e3a027d67550a1641f5e
         with:
           app-name: ${{ steps.set-vars.outputs.webapp_name }}
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_QA }}
@@ -164,7 +164,7 @@ jobs:
 
       - name: Deploy to PROD
         if: github.ref_name == 'master'
-        uses: azure/webapps-deploy@2f8dc2a99042b4b45d04e768723f50800d1e5631
+        uses: azure/webapps-deploy@122b7ec46017e53a3f71e3a027d67550a1641f5e
         with:
           app-name: ${{ steps.set-vars.outputs.webapp_name }}
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
