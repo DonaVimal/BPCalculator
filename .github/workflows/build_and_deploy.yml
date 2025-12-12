@@ -1,4 +1,4 @@
-name: CI / OWASP / E2E / BDD - Blue/Green Hybrid
+name: CI / E2E / BDD - Blue/Green Hybrid
 
 on:
   workflow_dispatch:
@@ -119,6 +119,9 @@ jobs:
     name: Deploy to Azure
     runs-on: ubuntu-latest
     needs: build-and-test
+    # ADD THIS LINE: Only run deploy/tests if we are on specific branches
+    if: github.ref_name == 'master' || github.ref_name == 'dev' || github.ref_name == 'qa'
+    
     outputs:
       webapp_url: ${{ steps.set-vars.outputs.webapp_url }}
       webapp_name: ${{ steps.set-vars.outputs.webapp_name }}
