@@ -21,10 +21,10 @@ namespace BPCalculator
         public const int DiastolicMax = 100;
 
         [Range(SystolicMin, SystolicMax, ErrorMessage = "Invalid Systolic Value")]
-        public int Systolic { get; set; }                       // mmHG
+        public int Systolic { get; set; }                               // mmHG
 
         [Range(DiastolicMin, DiastolicMax, ErrorMessage = "Invalid Diastolic Value")]
-        public int Diastolic { get; set; }                      // mmHG
+        public int Diastolic { get; set; }                              // mmHG
 
         public bool IsValidReading => Systolic > Diastolic;
 
@@ -32,7 +32,19 @@ namespace BPCalculator
 
         public BPCategory CalculateCategory(Action<string, IDictionary<string, string>> telemetryHook = null)
         {
-            // Basic validation: systolic must be higher than diastolic
+            // 1. FIRST: Validate the Ranges (Data Annotations)
+            // We must do this before checking IsValidReading to get the correct error message for the tests.
+            var context = new ValidationContext(this);
+            var results = new List<ValidationResult>();
+            var isValid = Validator.TryValidateObject(this, context, results, validateAllProperties: true);
+
+            if (!isValid)
+            {
+                // Throw the specific error message (e.g., "Invalid Systolic Value") expecting by the test
+                throw new ArgumentException(results[0].ErrorMessage);
+            }
+
+            // 2. SECOND: Validate logic (Systolic > Diastolic)
             if (!IsValidReading)
             {
                 telemetryHook?.Invoke("BP_Calc", new Dictionary<string, string>
@@ -44,6 +56,7 @@ namespace BPCalculator
                 throw new InvalidOperationException("Systolic pressure must be higher than diastolic pressure.");
             }
 
+            // 3. THIRD: Determine Category
             // Ranges (lower limits inclusive)
             if (Systolic >= 140 || Diastolic >= 90)
             {
@@ -88,7 +101,7 @@ namespace BPCalculator
             return BPCategory.Low;
         }
 
-        // New: Validate input ranges using DataAnnotations. Returns validation messages.
+        // Helper method (kept for compatibility, though logic is now inside CalculateCategory too)
         public bool Validate(out IList<string> validationMessages)
         {
             var context = new ValidationContext(this);

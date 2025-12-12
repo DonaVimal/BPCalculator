@@ -1,56 +1,64 @@
-# Name of the workflow as it appears in GitHub Actions UI
-name: BPCalculator CI
+name: CI / E2E / BDD - Blue/Green Hybrid
 
-# Define when this workflow will run
 on:
-  workflow_dispatch: # Allow manual triggering from GitHub UI
+  workflow_dispatch:
   push:
     branches:
-      - master # Run automatically when code is pushed to main branch
+      - master
+      - dev
+      - qa
   pull_request:
-    branches: 
-      - master 
+    branches:
+      - master
+      - dev
+      - qa
 
-# Environment variables used throughout the workflow
 env:
-  AZURE_WEBAPP_NAME: BPBloodPressure
-  AZURE_WEBAPP_PACKAGE_PATH: "./BPCalculator/publish"
   DOTNET_VERSION: "9.x"
   SOLUTION_PATH: "BPCalculator.sln"
   API_PROJECT_PATH: "BPCalculator"
   PUBLISH_DIR: "./publish"
+  AZURE_WEBAPP_PACKAGE_PATH: "./BPCalculator/publish"
+
+  # SonarCloud Configuration
   SONAR_HOST_URL: "https://sonarcloud.io"
   SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
   SONAR_ORG: ${{ secrets.SONAR_ORG }}
   SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  
+  # Base App Name (Prod)
+  PROD_APP_NAME: BPBloodPressure
 
-# Define the separate jobs that make up this workflow
 jobs:
-  # First job: build and unit test the application
+  # ====================================================================
+  # JOB 1: BUILD, TEST, AND SONAR ANALYSIS (Unchanged)
+  # ====================================================================
   build-and-test:
     name: Build and Unit Test
-    runs-on: ubuntu-latest 
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      # Install SonarScanner .NET tool
       - name: Install SonarScanner
         run: |
           dotnet tool install --global dotnet-sonarscanner
           dotnet tool install --global coverlet.console
           echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
-      - name: SonarQube Begin Analysis
+      - name: SonarCloud Begin Analysis
         run: |
           dotnet sonarscanner begin \
             /k:"${{ env.SONAR_PROJECT_KEY }}" \
             /o:"${{ env.SONAR_ORG }}" \
+            /d:sonar.branch.name="${{ github.ref_name }}" \
             /d:sonar.host.url="${{ env.SONAR_HOST_URL }}" \
             /d:sonar.token="${{ env.SONAR_TOKEN }}" \
             /d:sonar.exclusions="**/Program.cs,**/Startup.cs,**/Pages/**" \
@@ -62,7 +70,7 @@ jobs:
 
       - name: Build
         run: dotnet build ${{ env.SOLUTION_PATH }} --configuration Release --no-restore
-      
+
       - name: Run unit tests
         run: |
           mkdir -p TestReports
@@ -71,7 +79,7 @@ jobs:
             --logger "trx;LogFileName=test_results.trx" \
             --no-build \
             --results-directory TestReports
-      
+
       - name: Generate OpenCover Coverage
         run: |
           mkdir -p TestReports
@@ -81,40 +89,42 @@ jobs:
             --targetargs "test BPCalculator.Unit.Tests/BPCalculator.Unit.Tests.csproj --no-build --configuration Release" \
             --format opencover \
             --output TestReports/coverage.xml
-      
-      - name: List TestReports
-        run: ls -R TestReports
 
       - name: SonarCloud End
+        if: always()
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: dotnet-sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"    
+        run: dotnet-sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
 
       - name: Publish
         run: dotnet publish ${{ env.API_PROJECT_PATH }} --configuration Release --no-restore --no-build --output ${{ env.PUBLISH_DIR }}
-      
-      - name: Verify Publish Output
-        run: ls -R ${{ env.PUBLISH_DIR }}
 
-      # upload the published web app
       - name: Upload WebApp Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: webapp              # must match what deploy job expects
+          name: webapp
           path: ${{ env.PUBLISH_DIR }}
-      
-      # Store the published output as an artifact for later jobs
-      - name: Upload Artifacts
+
+      - name: Upload Test & Coverage Reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: unit-test-coverage-reports
           path: TestReports/
-  
-  # Second job: deploy the application to Azure
+
+  # ====================================================================
+  # JOB 2: DEPLOY TO AZURE (Updated for Blue/Green on Master)
+  # ====================================================================
   deploy:
     name: Deploy to Azure
     runs-on: ubuntu-latest
-    needs: [build-and-test] 
+    needs: build-and-test
+    # ADD THIS LINE: Only run deploy/tests if we are on specific branches
+    if: github.ref_name == 'master' || github.ref_name == 'dev' || github.ref_name == 'qa'
+    
+    outputs:
+      webapp_url: ${{ steps.set-vars.outputs.webapp_url }}
+      webapp_name: ${{ steps.set-vars.outputs.webapp_name }}
 
     steps:
       - name: Download artifact from build job
@@ -123,23 +133,65 @@ jobs:
           name: webapp
           path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
-      - name: Deploy
+      # --------------------------------------------------------
+      # Logic Update: Master now points to STAGING URL
+      # --------------------------------------------------------
+      - name: Set Environment Variables
+        id: set-vars
+        run: |
+          if [[ "${{ github.ref_name }}" == "dev" ]]; then
+            echo "webapp_name=BPBloodPressure-Dev" >> $GITHUB_OUTPUT
+            echo "webapp_url=https://bpbloodpressure-dev-h6a2dbbvc6g2awc7.uksouth-01.azurewebsites.net" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref_name }}" == "qa" ]]; then
+            echo "webapp_name=BPBloodPressure-QA" >> $GITHUB_OUTPUT
+            echo "webapp_url=https://BPBloodPressure-QA.azurewebsites.net" >> $GITHUB_OUTPUT
+          else
+            # MASTER BRANCH: Point to the staging URL for testing
+            echo "webapp_name=${{ env.PROD_APP_NAME }}" >> $GITHUB_OUTPUT
+            echo "webapp_url=https://${{ env.PROD_APP_NAME }}-staging.azurewebsites.net" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy to DEV
+        if: github.ref_name == 'dev'
         uses: azure/webapps-deploy@v2
         with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          app-name: ${{ steps.set-vars.outputs.webapp_name }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_DEV }}
           package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
-          # --- APPLICATION INSIGHTS ---
-          # This sets the environment variable in the Azure Web App configuration
-          configuration-settings: 'APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CONN_STRING }}'
+          configuration-settings: 'APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CONN_STRING_DEV }}'
 
+      - name: Deploy to QA
+        if: github.ref_name == 'qa'
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ steps.set-vars.outputs.webapp_name }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_QA }}
+          package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
+          configuration-settings: 'APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CONN_STRING_QA }}'
 
-  # Third job: Run E2E Tests against the live Azure site
+      # --------------------------------------------------------
+      # Update: Deploy to STAGING Slot on Master
+      # --------------------------------------------------------
+      - name: Deploy to PROD (Staging Slot)
+        if: github.ref_name == 'master'
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ steps.set-vars.outputs.webapp_name }}
+          # MUST USE THE STAGING PROFILE
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_STAGING }}
+          package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
+          # TARGET THE SLOT
+          slot-name: staging
+          configuration-settings: 'APPLICATIONINSIGHTS_CONNECTION_STRING=${{ secrets.APPINSIGHTS_CONN_STRING_PROD }}'
+
+  # ====================================================================
+  # JOB 3: E2E TESTS (Playwright)
+  # ====================================================================
   e2e-tests:
     name: Run E2E Tests (Playwright)
     runs-on: ubuntu-latest
-    needs: deploy # Wait for deploy to finish
-    
+    needs: deploy
+
     steps:
       - uses: actions/checkout@v4
 
@@ -148,35 +200,98 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      # Build the Test Project specifically
       - name: Build E2E Tests
         run: dotnet build BPCalculator.E2ETests/BPCalculator.E2ETests.csproj --configuration Release
 
-      # Install the required browsers for Playwright
       - name: Install Playwright Browsers
         run: pwsh BPCalculator.E2ETests/bin/Release/net9.0/playwright.ps1 install
 
-      # Run the tests pointing to the Azure URL
       - name: Run Playwright Tests
         env:
-          # This overrides the Localhost URL in your C# code
-          AppUrl: "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          # Automatically picks up Staging URL on Master
+          AppUrl: ${{ needs.deploy.outputs.webapp_url }}
         run: dotnet test BPCalculator.E2ETests/BPCalculator.E2ETests.csproj --configuration Release --logger "trx;LogFileName=e2e_results.trx"
-  
-  # Fourth job: Run Performance Tests using k6
+
+      - name: Upload E2E Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: |
+            **/e2e_results.trx
+            **/TestResults/**
+
+  # ====================================================================
+  # JOB 4: PERFORMANCE TESTS (k6)
+  # ====================================================================
   performance-test:
     name: Run Performance Tests (k6)
     runs-on: ubuntu-latest
-    needs: deploy # Must wait for the site to be live
-    
+    needs: deploy
+
     steps:
       - uses: actions/checkout@v4
 
-      # Run k6 using the official GitHub Action
       - name: Run k6 Load Test
         uses: grafana/k6-action@v0.3.0
         env:
-          # Pass the Azure URL to the script as an Environment Variable
-          APP_URL: "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          # Automatically picks up Staging URL on Master
+          APP_URL: ${{ needs.deploy.outputs.webapp_url }}
         with:
           filename: bp-load-test.js
+          flags: --out json=k6_results.json
+
+      - name: Upload k6 Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-performance-results
+          path: k6_results.json
+
+  # ====================================================================
+  # JOB 5: BDD TESTS (Reqnroll)
+  # ====================================================================
+  bdd-tests:
+    name: Run BDD Tests (Reqnroll)
+    runs-on: ubuntu-latest
+    needs: deploy
+
+    permissions:
+      checks: write
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Run BDD Tests
+        env:
+          # Automatically picks up Staging URL on Master
+          AppUrl: ${{ needs.deploy.outputs.webapp_url }}
+        run: |
+          mkdir -p TestReports
+          dotnet test BPCalculator.Reqnroll.BDDTests/BPCalculator.Reqnroll.BDDTests.csproj \
+            --configuration Release \
+            --logger "trx;LogFileName=bdd_results.trx" \
+            --results-directory TestReports
+
+      - name: Publish Test Report to Checks
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: BDD Scenarios Report
+          path: "TestReports/bdd_results.trx"
+          reporter: dotnet-trx
+          fail-on-error: false
+
+      - name: Upload raw TRX backup
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bdd-results-trx
+          path: TestReports/bdd_results.trx
